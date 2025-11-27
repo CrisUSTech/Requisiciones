@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1 class="text-xl font-semibold mb-4 text-slate-800">
+    Panel – {{ session.get('role') }}
+</h1>
+
+<div class="mb-4 flex justify-between items-center">
+    <form method="get" class="flex gap-2 items-end">
+        <div>
+            <label class="block text-xs text-slate-600">Proyecto/Tema contiene</label>
+            <input type="text" name="proyecto" value="{{ request.args.get('proyecto','') }}"
+                   class="border border-slate-300 rounded px-2 py-1 text-xs">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-600">Prioridad</label>
+            <select name="prioridad"
+                    class="border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="">Todas</option>
+                <option value="Alta"  {% if request.args.get('prioridad')=='Alta' %}selected{% endif %}>Alta</option>
+                <option value="Media" {% if request.args.get('prioridad')=='Media' %}selected{% endif %}>Media</option>
+                <option value="Baja"  {% if request.args.get('prioridad')=='Baja' %}selected{% endif %}>Baja</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs text-slate-600">Fecha Mant. (YYYY-MM-DD)</label>
+            <input type="date" name="fecha_mantenimiento" value="{{ request.args.get('fecha_mantenimiento','') }}"
+                   class="border border-slate-300 rounded px-2 py-1 text-xs">
+        </div>
+        <div>
+            <label class="block text-xs text-slate-600">Estado</label>
+            <select name="estado"
+                    class="border border-slate-300 rounded px-2 py-1 text-xs">
+                <option value="">Todos</option>
+                {% for e in estados %}
+                  <option value="{{ e }}" {% if request.args.get('estado')==e %}selected{% endif %}>{{ e }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <button type="submit"
+                    class="bg-slate-700 text-white text-xs px-3 py-1 rounded hover:bg-slate-800 mt-4">
+                Filtrar
+            </button>
+        </div>
+    </form>
+
+    <div class="flex gap-2">
+        {% if session.get('role') == 'Mantenimiento' %}
+        <a href="{{ url_for('new_requisition') }}"
+           class="text-xs px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700">
+           + Nueva requisición
+        </a>
+        {% endif %}
+        <a href="{{ url_for('export_csv') }}"
+           class="text-xs px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+           Exportar CSV
+        </a>
+    </div>
+</div>
+
+{% if requisitions %}
+<div class="overflow-x-auto bg-white rounded-lg shadow border border-slate-200">
+<table class="min-w-full text-xs">
+    <thead class="bg-slate-100 text-slate-700">
+        <tr>
+            <th class="px-3 py-2 border-b">ID</th>
+            <th class="px-3 py-2 border-b">Proyecto/Tema</th>
+            <th class="px-3 py-2 border-b">Prioridad</th>
+            <th class="px-3 py-2 border-b">Fecha Mant.</th>
+            <th class="px-3 py-2 border-b">Estado</th>
+            <th class="px-3 py-2 border-b">Costo Total</th>
+            <th class="px-3 py-2 border-b">Acciones</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for r in requisitions %}
+        <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2 border-b">{{ r.id }}</td>
+            <td class="px-3 py-2 border-b">{{ r.proyecto }}</td>
+            <td class="px-3 py-2 border-b">{{ r.prioridad }}</td>
+            <td class="px-3 py-2 border-b">{{ r.fecha_mantenimiento }}</td>
+            <td class="px-3 py-2 border-b">{{ r.estado }}</td>
+            <td class="px-3 py-2 border-b">
+                {% if r.costo_total %}
+                    ${{ "%.2f"|format(r.costo_total) }}
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+            <td class="px-3 py-2 border-b">
+                <a href="{{ url_for('view_requisition', req_id=r.id) }}"
+                   class="text-xs px-2 py-1 rounded bg-slate-700 text-white hover:bg-slate-800">
+                   Ver / Procesar
+                </a>
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<p class="text-sm text-slate-500">No hay requisiciones que coincidan con el filtro.</p>
+{% endif %}
+
+{% endblock %}
