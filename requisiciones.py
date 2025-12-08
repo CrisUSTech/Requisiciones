@@ -2,15 +2,12 @@ import os
 from datetime import date, datetime
 
 from flask import (
-    Flask, request, redirect, url_for, render_template, session, send_file, flash
+    Flask, request, redirect, url_for, render_template, session,
+    send_file, flash
 )
 from flask_sqlalchemy import SQLAlchemy
 from io import StringIO
 import csv
-
-# ============================================================
-# CONFIGURACIÓN FLASK + SQLALCHEMY
-# ============================================================
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "dev-secret-key")
@@ -19,11 +16,6 @@ db = SQLAlchemy()
 
 
 def get_database_uri():
-    """
-    Si existe DATABASE_URL (Render / Aiven), la usa.
-    Si no, usa SQLite local (local.db).
-    Corrige 'postgres://' -> 'postgresql://'.
-    """
     db_url = os.environ.get("DATABASE_URL")
     if db_url:
         if db_url.startswith("postgres://"):
@@ -38,16 +30,16 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
 
-# ============================================================
+# ===========================
 # MODELOS
-# ============================================================
+# ===========================
 
 class User(db.Model):
     __tablename__ = "users"
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
-    password = db.Column(db.String(100), nullable=False)  # texto plano (demo)
-    role = db.Column(db.String(50), nullable=False)       # Mantenimiento / Almacén / Compras
+    password = db.Column(db.String(100), nullable=False)
+    role = db.Column(db.String(50), nullable=False)
 
 
 class Requisition(db.Model):
@@ -61,13 +53,12 @@ class Requisition(db.Model):
     estado = db.Column(db.String(50), nullable=False, default="Solicitado")
     solicitante_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
 
-    # Autorización por Mantenimiento 1 / 2
-    autorizado = db.Column(db.Boolean, default=True)                # False si requiere autorización
+    # Autorización para mantenimiento3
+    autorizado = db.Column(db.Boolean, default=True)
     autorizado_por = db.Column(db.Integer, db.ForeignKey("users.id"))
     fecha_autorizacion = db.Column(db.DateTime)
 
-    # Resumen de compra
-    proveedor = db.Column(db.String(255))      # resumen (se puede llenar con lista de proveedores materiales)
+    proveedor = db.Column(db.String(255))
     costo_total = db.Column(db.Float, default=0.0)
 
     revisado_por = db.Column(db.Integer, db.ForeignKey("users.id"))
@@ -91,30 +82,21 @@ class Material(db.Model):
     unidad = db.Column(db.String(20), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
 
-    revisado_qty = db.Column(db.Integer, default=0)      # lo que almacén revisó
-    stock_available = db.Column(db.Integer, default=0)   # stock real
+    revisado_qty = db.Column(db.Integer, default=0)
+    stock_available = db.Column(db.Integer, default=0)
 
     costo_unitario = db.Column(db.Float, default=0.0)
-    comprado_qty = db.Column(db.Integer, default=0)      # cantidad efectivamente comprada
+    comprado_qty = db.Column(db.Integer, default=0)
 
-    # NUEVO: proveedor específico por material
+    # proveedor por material
     proveedor = db.Column(db.String(255))
 
 
-# ============================================================
-# INICIALIZACIÓN DE DB Y USUARIOS DE PRUEBA
-# ============================================================
+# ===========================
+# SEED USERS
+# ===========================
 
 def seed_users():
-    """
-    Crea usuarios de prueba:
-      - mantenimiento1 / m1 (Mantenimiento, AUTORIZA)
-      - mantenimiento2 / m2 (Mantenimiento, AUTORIZA)
-      - mantenimiento3 / m3 (Mantenimiento, SOLO SOLICITA)
-      - almacen / a      (Almacén)
-      - compras1 / c1    (Compras)
-      - compras2 / c2    (Compras)
-    """
     if User.query.count() > 0:
         return
 
@@ -135,9 +117,9 @@ with app.app_context():
     seed_users()
 
 
-# ============================================================
+# ===========================
 # HELPERS
-# ============================================================
+# ===========================
 
 def current_user():
     if "user_id" not in session:
@@ -146,7 +128,6 @@ def current_user():
 
 
 def login_required(fn):
-    # Decorador simple
     from functools import wraps
 
     @wraps(fn)
@@ -158,15 +139,14 @@ def login_required(fn):
 
 
 def es_autorizador(user: User) -> bool:
-    """Solo mantenimiento1 y mantenimiento2 pueden autorizar."""
     if not user or user.role != "Mantenimiento":
         return False
     return user.username in ("mantenimiento1", "mantenimiento2")
 
 
-# ============================================================
-# RUTAS
-# ============================================================
+# ===========================
+# RUTAS AUTH
+# ===========================
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -175,10 +155,7 @@ def login():
         pwd = request.form.get("password", "")
         user = User.query.filter(db.func.lower(User.username) == uname).first()
         if not user or user.password != pwd:
-            return render_template(
-                "login.html",
-                error="Usuario o contraseña incorrectos."
-            )
+            return render_template("login.html", error="Usuario o contraseña incorrectos.")
         session["user_id"] = user.id
         session["username"] = user.username
         session["role"] = user.role
@@ -193,6 +170,10 @@ def logout():
     return redirect(url_for("login"))
 
 
+# ===========================
+# DASHBOARD
+# ===========================
+
 @app.route("/")
 @login_required
 def dashboard():
@@ -200,14 +181,11 @@ def dashboard():
     if not user:
         return redirect(url_for("login"))
 
-    # Filtros
     q_proyecto = request.args.get("proyecto", "").strip().lower()
     q_prioridad = request.args.get("prioridad", "")
     q_fecha_mant = request.args.get("fecha_mantenimiento", "")
     q_estado = request.args.get("estado", "")
 
-    # Ahora TODOS los roles ven TODAS las requisiciones,
-    # y cada quien filtra según lo que necesite.
     query = Requisition.query
 
     if q_proyecto:
@@ -241,6 +219,10 @@ def dashboard():
     )
 
 
+# ===========================
+# NUEVA REQUISICIÓN (SIN LÍMITE DE MATERIALES)
+# ===========================
+
 @app.route("/requisiciones/nueva", methods=["GET", "POST"])
 @login_required
 def new_requisition():
@@ -261,12 +243,12 @@ def new_requisition():
         utilizacion = request.form.get("utilizacion", "").strip()
         prioridad = request.form.get("prioridad", "Media")
 
-        # Si el que solicita es mantenimiento3 -> requiere autorización
+        # lógicas de autorización por usuario
         if user.username == "mantenimiento3":
-            estado_inicial = "Pendiente Autorización"
+            estado_ini = "Pendiente Autorización"
             autorizado = False
         else:
-            estado_inicial = "Solicitado"
+            estado_ini = "Solicitado"
             autorizado = True
 
         req = Requisition(
@@ -275,19 +257,23 @@ def new_requisition():
             proyecto=proyecto,
             utilizacion=utilizacion,
             prioridad=prioridad,
-            estado=estado_inicial,
+            estado=estado_ini,
             solicitante_id=user.id,
             autorizado=autorizado
         )
         db.session.add(req)
-        db.session.flush()  # para obtener ID
+        db.session.flush()  # ID listo
 
-        # Materiales
+        # MATERIALES DINÁMICOS: desc[], unidad[], cant[]
+        descs = request.form.getlist("desc[]")
+        unidades = request.form.getlist("unidad[]")
+        cants = request.form.getlist("cant[]")
+
         materiales_validos = 0
-        for i in range(1, 11):
-            desc = request.form.get(f"desc_{i}", "").strip()
-            unidad = request.form.get(f"unidad_{i}", "").strip()
-            cant_str = request.form.get(f"cant_{i}", "").strip()
+        for desc, unidad, cant_str in zip(descs, unidades, cants):
+            desc = (desc or "").strip()
+            unidad = (unidad or "").strip()
+            cant_str = (cant_str or "").strip()
             if not desc or not unidad or not cant_str:
                 continue
             try:
@@ -296,6 +282,7 @@ def new_requisition():
                     continue
             except ValueError:
                 continue
+
             mat = Material(
                 requisition_id=req.id,
                 descripcion=desc,
@@ -317,6 +304,10 @@ def new_requisition():
     return render_template("new_requisition.html")
 
 
+# ===========================
+# DETALLE + AUTORIZAR
+# ===========================
+
 @app.route("/requisiciones/<int:req_id>")
 @login_required
 def view_requisition(req_id):
@@ -324,8 +315,6 @@ def view_requisition(req_id):
     user = current_user()
     return render_template("view_requisition.html", req=req, user=user, es_autorizador=es_autorizador)
 
-
-# ---------- AUTORIZACIÓN M1 / M2 ----------
 
 @app.route("/requisiciones/<int:req_id>/autorizar", methods=["POST"])
 @login_required
@@ -344,7 +333,6 @@ def autorizar_requisicion(req_id):
     req.autorizado = True
     req.autorizado_por = user.id
     req.fecha_autorizacion = datetime.utcnow()
-    # Cambio de estado a 'Solicitado' para que Almacén/Compras la trabajen
     req.estado = "Solicitado"
 
     db.session.commit()
@@ -352,7 +340,9 @@ def autorizar_requisicion(req_id):
     return redirect(url_for("view_requisition", req_id=req.id))
 
 
-# ---------- ALMACÉN ----------
+# ===========================
+# ALMACÉN
+# ===========================
 
 @app.route("/requisiciones/<int:req_id>/almacen", methods=["POST"])
 @login_required
@@ -364,12 +354,10 @@ def process_almacen(req_id):
 
     req = Requisition.query.get_or_404(req_id)
 
-    # Si no está autorizada (caso mantenimiento3), Almacén no debe trabajarla.
     if not req.autorizado:
         flash("Esta requisición aún no ha sido autorizada por Mantenimiento.")
         return redirect(url_for("view_requisition", req_id=req.id))
 
-    # Actualizar cantidades
     for m in req.materiales:
         rev_str = request.form.get(f"rev_{m.id}", "0")
         stock_str = request.form.get(f"stock_{m.id}", "0")
@@ -379,10 +367,12 @@ def process_almacen(req_id):
         except ValueError:
             rev_val = 0
             stock_val = 0
+
         if rev_val < 0 or rev_val > m.cantidad:
             rev_val = 0
         if stock_val < 0:
             stock_val = 0
+
         m.revisado_qty = rev_val
         m.stock_available = stock_val
 
@@ -400,7 +390,9 @@ def process_almacen(req_id):
     return redirect(url_for("view_requisition", req_id=req.id))
 
 
-# ---------- COMPRAS ----------
+# ===========================
+# COMPRAS
+# ===========================
 
 @app.route("/requisiciones/<int:req_id>/compras", methods=["POST"])
 @login_required
@@ -454,7 +446,6 @@ def process_compras(req_id):
         if comp_val < m.cantidad:
             compra_parcial_detectada = True
 
-    # Resumen de proveedores en la cabecera (para referencia)
     if proveedores_usados:
         req.proveedor = ", ".join(sorted(proveedores_usados))
     else:
@@ -471,15 +462,14 @@ def process_compras(req_id):
     flash("Compra registrada correctamente. Almacén puede revisar las piezas compradas.")
     return redirect(url_for("view_requisition", req_id=req.id))
 
-# ---------- EXPORT CSV ----------
+
+# ===========================
+# EXPORT CSV
+# ===========================
 
 @app.route("/export_csv")
 @login_required
 def export_csv():
-    """
-    Exporta TODAS las requisiciones (para todos los roles) a un CSV
-    que Excel puede abrir sin problema (delimitador coma, UTF-8).
-    """
     requisitions = Requisition.query.order_by(Requisition.id).all()
 
     si = StringIO()
@@ -533,9 +523,10 @@ def export_csv():
         download_name="requisiciones_todas.csv"
     )
 
-# ============================================================
+
+# ===========================
 # MAIN
-# ============================================================
+# ===========================
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
