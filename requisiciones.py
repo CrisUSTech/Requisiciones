@@ -60,8 +60,16 @@ class Requisition(db.Model):
     prioridad = db.Column(db.String(20), nullable=False)   # Alta / Media / Baja
     estado = db.Column(db.String(50), nullable=False, default="Solicitado")
     solicitante_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
-    proveedor = db.Column(db.String(255))
+
+    # Autorización por Mantenimiento 1 / 2
+    autorizado = db.Column(db.Boolean, default=True)                # False si requiere autorización
+    autorizado_por = db.Column(db.Integer, db.ForeignKey("users.id"))
+    fecha_autorizacion = db.Column(db.DateTime)
+
+    # Resumen de compra
+    proveedor = db.Column(db.String(255))      # resumen (se puede llenar con lista de proveedores materiales)
     costo_total = db.Column(db.Float, default=0.0)
+
     revisado_por = db.Column(db.Integer, db.ForeignKey("users.id"))
     fecha_revision = db.Column(db.DateTime)
     finalizado_por = db.Column(db.Integer, db.ForeignKey("users.id"))
@@ -82,10 +90,15 @@ class Material(db.Model):
     descripcion = db.Column(db.Text, nullable=False)
     unidad = db.Column(db.String(20), nullable=False)
     cantidad = db.Column(db.Integer, nullable=False)
+
     revisado_qty = db.Column(db.Integer, default=0)      # lo que almacén revisó
     stock_available = db.Column(db.Integer, default=0)   # stock real
+
     costo_unitario = db.Column(db.Float, default=0.0)
     comprado_qty = db.Column(db.Integer, default=0)      # cantidad efectivamente comprada
+
+    # NUEVO: proveedor específico por material
+    proveedor = db.Column(db.String(255))
 
 
 # ============================================================
@@ -95,11 +108,12 @@ class Material(db.Model):
 def seed_users():
     """
     Crea usuarios de prueba:
-      - mantenimiento1 / m1 (Mantenimiento)
-      - mantenimiento2 / m2 (Mantenimiento)
-      - almacen / a (Almacén)
-      - compras1 / c1 (Compras)
-      - compras2 / c2 (Compras)
+      - mantenimiento1 / m1 (Mantenimiento, AUTORIZA)
+      - mantenimiento2 / m2 (Mantenimiento, AUTORIZA)
+      - mantenimiento3 / m3 (Mantenimiento, SOLO SOLICITA)
+      - almacen / a      (Almacén)
+      - compras1 / c1    (Compras)
+      - compras2 / c2    (Compras)
     """
     if User.query.count() > 0:
         return
@@ -107,6 +121,7 @@ def seed_users():
     demo_users = [
         User(username="mantenimiento1", password="m1", role="Mantenimiento"),
         User(username="mantenimiento2", password="m2", role="Mantenimiento"),
+        User(username="mantenimiento3", password="m3", role="Mantenimiento"),
         User(username="almacen",        password="a",  role="Almacén"),
         User(username="compras1",       password="c1", role="Compras"),
         User(username="compras2",       password="c2", role="Compras"),
@@ -118,6 +133,7 @@ def seed_users():
 with app.app_context():
     db.create_all()
     seed_users()
+
 
 # ============================================================
 # HELPERS
@@ -139,6 +155,13 @@ def login_required(fn):
             return redirect(url_for("login"))
         return fn(*args, **kwargs)
     return wrapper
+
+
+def es_autorizador(user: User) -> bool:
+    """Solo mantenimiento1 y mantenimiento2 pueden autorizar."""
+    if not user or user.role != "Mantenimiento":
+        return False
+    return user.username in ("mantenimiento1", "mantenimiento2")
 
 
 # ============================================================
@@ -183,20 +206,9 @@ def dashboard():
     q_fecha_mant = request.args.get("fecha_mantenimiento", "")
     q_estado = request.args.get("estado", "")
 
+    # Ahora TODOS los roles ven TODAS las requisiciones,
+    # y cada quien filtra según lo que necesite.
     query = Requisition.query
-
-    # Visibilidad por rol:
-    if user.role == "Mantenimiento":
-        query = query.filter_by(solicitante_id=user.id)
-    elif user.role == "Almacén":
-        # Ve solicitadas y autorizadas / en stock
-        query = query.filter(Requisition.estado.in_([
-            "Solicitado", "Revisado - En Stock", "Revisado - Autorizada"
-        ]))
-    elif user.role == "Compras":
-        query = query.filter(Requisition.estado.in_([
-            "Revisado - Autorizada", "Comprado", "Comprado (Parcial)"
-        ]))
 
     if q_proyecto:
         query = query.filter(Requisition.proyecto.ilike(f"%{q_proyecto}%"))
@@ -214,6 +226,7 @@ def dashboard():
     requisitions = query.order_by(Requisition.id.desc()).all()
 
     estados_posibles = [
+        "Pendiente Autorización",
         "Solicitado",
         "Revisado - En Stock",
         "Revisado - Autorizada",
@@ -248,14 +261,23 @@ def new_requisition():
         utilizacion = request.form.get("utilizacion", "").strip()
         prioridad = request.form.get("prioridad", "Media")
 
+        # Si el que solicita es mantenimiento3 -> requiere autorización
+        if user.username == "mantenimiento3":
+            estado_inicial = "Pendiente Autorización"
+            autorizado = False
+        else:
+            estado_inicial = "Solicitado"
+            autorizado = True
+
         req = Requisition(
             fecha_solicitud=date.today(),
             fecha_mantenimiento=fecha_mant,
             proyecto=proyecto,
             utilizacion=utilizacion,
             prioridad=prioridad,
-            estado="Solicitado",
-            solicitante_id=user.id
+            estado=estado_inicial,
+            solicitante_id=user.id,
+            autorizado=autorizado
         )
         db.session.add(req)
         db.session.flush()  # para obtener ID
@@ -299,9 +321,38 @@ def new_requisition():
 @login_required
 def view_requisition(req_id):
     req = Requisition.query.get_or_404(req_id)
-    # En un proyecto real, aquí también validarías permisos de ver
-    return render_template ("view_requisition.html", req=req)
+    user = current_user()
+    return render_template("view_requisition.html", req=req, user=user, es_autorizador=es_autorizador)
 
+
+# ---------- AUTORIZACIÓN M1 / M2 ----------
+
+@app.route("/requisiciones/<int:req_id>/autorizar", methods=["POST"])
+@login_required
+def autorizar_requisicion(req_id):
+    user = current_user()
+    req = Requisition.query.get_or_404(req_id)
+
+    if not es_autorizador(user):
+        flash("Solo mantenimiento1 y mantenimiento2 pueden autorizar requisiciones.")
+        return redirect(url_for("view_requisition", req_id=req.id))
+
+    if req.autorizado:
+        flash("La requisición ya estaba autorizada.")
+        return redirect(url_for("view_requisition", req_id=req.id))
+
+    req.autorizado = True
+    req.autorizado_por = user.id
+    req.fecha_autorizacion = datetime.utcnow()
+    # Cambio de estado a 'Solicitado' para que Almacén/Compras la trabajen
+    req.estado = "Solicitado"
+
+    db.session.commit()
+    flash("Requisición autorizada correctamente.")
+    return redirect(url_for("view_requisition", req_id=req.id))
+
+
+# ---------- ALMACÉN ----------
 
 @app.route("/requisiciones/<int:req_id>/almacen", methods=["POST"])
 @login_required
@@ -312,6 +363,11 @@ def process_almacen(req_id):
         return redirect(url_for("view_requisition", req_id=req_id))
 
     req = Requisition.query.get_or_404(req_id)
+
+    # Si no está autorizada (caso mantenimiento3), Almacén no debe trabajarla.
+    if not req.autorizado:
+        flash("Esta requisición aún no ha sido autorizada por Mantenimiento.")
+        return redirect(url_for("view_requisition", req_id=req.id))
 
     # Actualizar cantidades
     for m in req.materiales:
@@ -344,6 +400,8 @@ def process_almacen(req_id):
     return redirect(url_for("view_requisition", req_id=req.id))
 
 
+# ---------- COMPRAS ----------
+
 @app.route("/requisiciones/<int:req_id>/compras", methods=["POST"])
 @login_required
 def process_compras(req_id):
@@ -353,10 +411,6 @@ def process_compras(req_id):
         return redirect(url_for("view_requisition", req_id=req_id))
 
     req = Requisition.query.get_or_404(req_id)
-    proveedor = request.form.get("proveedor", "").strip()
-    if not proveedor:
-        flash("Proveedor obligatorio.")
-        return redirect(url_for("view_requisition", req_id=req.id))
 
     tipo_compra = request.form.get("tipo_compra")
     if tipo_compra not in ["total", "parcial"]:
@@ -365,10 +419,12 @@ def process_compras(req_id):
 
     total = 0.0
     compra_parcial_detectada = False
+    proveedores_usados = set()
 
     for m in req.materiales:
         cu_str = request.form.get(f"cu_{m.id}", "0")
         comp_str = request.form.get(f"comprado_{m.id}", "0")
+        prov_str = request.form.get(f"prov_{m.id}", "").strip()
 
         try:
             cu_val = float(cu_str)
@@ -388,12 +444,22 @@ def process_compras(req_id):
 
         m.costo_unitario = cu_val
         m.comprado_qty = comp_val
+        m.proveedor = prov_str or None
+
+        if m.proveedor:
+            proveedores_usados.add(m.proveedor)
+
         total += cu_val * comp_val
 
         if comp_val < m.cantidad:
             compra_parcial_detectada = True
 
-    req.proveedor = proveedor
+    # Resumen de proveedores en la cabecera (para referencia)
+    if proveedores_usados:
+        req.proveedor = ", ".join(sorted(proveedores_usados))
+    else:
+        req.proveedor = None
+
     req.costo_total = total
 
     if tipo_compra == "total" and not compra_parcial_detectada:
@@ -402,32 +468,19 @@ def process_compras(req_id):
         req.estado = "Comprado (Parcial)"
 
     db.session.commit()
-    flash("Compra registrada correctamente.")
+    flash("Compra registrada correctamente. Almacén puede revisar las piezas compradas.")
     return redirect(url_for("view_requisition", req_id=req.id))
 
+# ---------- EXPORT CSV ----------
 
 @app.route("/export_csv")
 @login_required
 def export_csv():
     """
-    Exporta las requisiciones visibles para el rol actual a un CSV
+    Exporta TODAS las requisiciones (para todos los roles) a un CSV
     que Excel puede abrir sin problema (delimitador coma, UTF-8).
     """
-    user = current_user()
-    query = Requisition.query
-
-    if user.role == "Mantenimiento":
-        query = query.filter_by(solicitante_id=user.id)
-    elif user.role == "Almacén":
-        query = query.filter(Requisition.estado.in_([
-            "Solicitado", "Revisado - En Stock", "Revisado - Autorizada"
-        ]))
-    elif user.role == "Compras":
-        query = query.filter(Requisition.estado.in_([
-            "Revisado - Autorizada", "Comprado", "Comprado (Parcial)"
-        ]))
-
-    requisitions = query.order_by(Requisition.id).all()
+    requisitions = Requisition.query.order_by(Requisition.id).all()
 
     si = StringIO()
     writer = csv.writer(si, delimiter=',')
@@ -435,7 +488,9 @@ def export_csv():
     writer.writerow([
         "ID", "Fecha_Solicitud", "Fecha_Mantenimiento", "Proyecto",
         "Utilizacion", "Prioridad", "Estado", "Solicitante_ID",
-        "Proveedor", "Costo_Total", "Revisado_Por", "Fecha_Revision",
+        "Autorizado", "Autorizado_Por", "Fecha_Autorizacion",
+        "Proveedor_Resumen", "Costo_Total",
+        "Revisado_Por", "Fecha_Revision",
         "Materiales_Detalle"
     ])
 
@@ -443,7 +498,8 @@ def export_csv():
         materiales_str = " | ".join(
             f"{m.cantidad} {m.unidad} {m.descripcion} "
             f"(Rev:{m.revisado_qty} Stock:{m.stock_available} "
-            f"CU:{m.costo_unitario} Comprado:{m.comprado_qty})"
+            f"CU:{m.costo_unitario} Comprado:{m.comprado_qty} "
+            f"Prov:{m.proveedor or ''})"
             for m in r.materiales
         )
 
@@ -456,6 +512,9 @@ def export_csv():
             r.prioridad,
             r.estado,
             r.solicitante_id,
+            "SI" if r.autorizado else "NO",
+            r.autorizado_por or "",
+            r.fecha_autorizacion.isoformat() if r.fecha_autorizacion else "",
             r.proveedor or "",
             f"{r.costo_total:.2f}" if r.costo_total is not None else "0.00",
             r.revisado_por or "",
@@ -471,9 +530,8 @@ def export_csv():
         output,
         mimetype="text/csv; charset=utf-8",
         as_attachment=True,
-        download_name=f"requisiciones_{user.role}.csv"
+        download_name="requisiciones_todas.csv"
     )
-
 
 # ============================================================
 # MAIN
