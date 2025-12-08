@@ -1,194 +1,368 @@
 {% extends "base.html" %}
+
 {% block content %}
 
-<h1 class="text-xl font-semibold mb-4 text-slate-800">
-    Requisición #{{ req.id }} – {{ req.proyecto }}
-</h1>
+<div class="max-w-6xl mx-auto py-6 space-y-6">
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    <div class="bg-white p-4 rounded border border-slate-200 text-sm">
-        <p><b>Fecha solicitud:</b> {{ req.fecha_solicitud }}</p>
-        <p><b>Fecha mantenimiento:</b> {{ req.fecha_mantenimiento }}</p>
-        <p><b>Prioridad:</b> {{ req.prioridad }}</p>
-        <p><b>Estado:</b> {{ req.estado }}</p>
-        <p><b>Solicitante ID:</b> {{ req.solicitante_id }}</p>
-        <p><b>Proveedor:</b> {{ req.proveedor or 'N/A' }}</p>
-        <p><b>Costo total:</b> 
-        {% if req.costo_total %}
-           ${{ "%.2f"|format(req.costo_total) }}
-        {% else %}
-           N/A
-        {% endif %}
-        </p>
-    </div>
-    <div class="bg-white p-4 rounded border border-slate-200 text-sm">
-        <p><b>Utilización:</b></p>
-        <p class="mt-1 whitespace-pre-wrap">{{ req.utilizacion or 'N/A' }}</p>
-        <hr class="my-2">
-        <p><b>Revisado por (Almacén):</b> {{ req.revisado_por or 'N/A' }}</p>
-        <p><b>Fecha revisión:</b> {{ req.fecha_revision or 'N/A' }}</p>
-        <p><b>Finalizado por:</b> {{ req.finalizado_por or 'N/A' }}</p>
-        <p><b>Fecha finalización:</b> {{ req.fecha_finalizacion or 'N/A' }}</p>
-    </div>
-</div>
-
-<h2 class="text-sm font-semibold mb-2 text-slate-800">Materiales</h2>
-<div class="overflow-x-auto bg-white rounded border border-slate-200 mb-4">
-<table class="min-w-full text-xs">
-    <thead class="bg-slate-100">
-        <tr>
-            <th class="px-2 py-1 border-b">Descripción</th>
-            <th class="px-2 py-1 border-b">Unidad</th>
-            <th class="px-2 py-1 border-b">Cant. Solic.</th>
-            <th class="px-2 py-1 border-b">Rev. Almacén</th>
-            <th class="px-2 py-1 border-b">Stock</th>
-            <th class="px-2 py-1 border-b">C/U</th>
-            <th class="px-2 py-1 border-b">Comprado</th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for m in req.materiales %}
-        <tr>
-            <td class="px-2 py-1 border-b">{{ m.descripcion }}</td>
-            <td class="px-2 py-1 border-b">{{ m.unidad }}</td>
-            <td class="px-2 py-1 border-b">{{ m.cantidad }}</td>
-            <td class="px-2 py-1 border-b">{{ m.revisado_qty }}</td>
-            <td class="px-2 py-1 border-b">{{ m.stock_available }}</td>
-            <td class="px-2 py-1 border-b">
-                {% if m.costo_unitario %}
-                    ${{ "%.2f"|format(m.costo_unitario) }}
-                {% else %}
-                    N/A
-                {% endif %}
-            </td>
-            <td class="px-2 py-1 border-b">{{ m.comprado_qty }}</td>
-        </tr>
-    {% endfor %}
-    </tbody>
-</table>
-</div>
-
-{% if session.get('role') == 'Almacén' %}
-<!-- Formulario de ALMACÉN -->
-<h3 class="text-sm font-semibold mb-2 text-slate-800">Acciones de Almacén</h3>
-<form method="post" action="{{ url_for('process_almacen', req_id=req.id) }}"
-      class="bg-white p-4 rounded border border-slate-200 text-xs space-y-3">
-    <p class="text-slate-600">Actualiza las cantidades revisadas y stock para cada material.</p>
-
-    <table class="min-w-full text-xs mb-3">
-        <thead class="bg-slate-100">
-            <tr>
-                <th class="px-2 py-1 border-b">Material</th>
-                <th class="px-2 py-1 border-b">Revisado</th>
-                <th class="px-2 py-1 border-b">Stock</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for m in req.materiales %}
-            <tr>
-                <td class="px-2 py-1 border-b">{{ m.descripcion }} ({{ m.cantidad }} {{ m.unidad }})</td>
-                <td class="px-2 py-1 border-b">
-                    <input type="number" name="rev_{{ m.id }}" min="0" max="{{ m.cantidad }}" 
-                           value="{{ m.revisado_qty }}"
-                           class="w-24 border border-slate-300 rounded px-1 py-1 text-xs">
-                </td>
-                <td class="px-2 py-1 border-b">
-                    <input type="number" name="stock_{{ m.id }}" min="0"
-                           value="{{ m.stock_available }}"
-                           class="w-24 border border-slate-300 rounded px-1 py-1 text-xs">
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-
-    <p class="text-xs text-slate-600 mb-1">¿Resultado de la revisión?</p>
-    <div class="flex gap-3">
-        <label class="inline-flex items-center text-xs">
-            <input type="radio" name="accion" value="Revisado - En Stock" required class="mr-1">
-            Todo en stock (Revisado - En Stock)
-        </label>
-        <label class="inline-flex items-center text-xs">
-            <input type="radio" name="accion" value="Revisado - Autorizada" required class="mr-1">
-            Faltan cosas (Autorizada para Compras)
-        </label>
-    </div>
-
-    <div class="flex justify-end gap-2 pt-2">
-        <button type="submit"
-                class="px-3 py-2 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
-            Guardar revisión de Almacén
-        </button>
-    </div>
-</form>
-{% endif %}
-
-{% if session.get('role') == 'Compras' and req.estado in ['Revisado - Autorizada', 'Comprado (Parcial)'] %}
-<!-- Formulario de COMPRAS -->
-<h3 class="text-sm font-semibold mb-2 text-slate-800 mt-6">Acciones de Compras</h3>
-<form method="post" action="{{ url_for('process_compras', req_id=req.id) }}"
-      class="bg-white p-4 rounded border border-slate-200 text-xs space-y-3">
+  <!-- Encabezado + botones -->
+  <div class="flex items-center justify-between">
     <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Proveedor</label>
-        <input type="text" name="proveedor" value="{{ req.proveedor or '' }}"
-               required
-               class="w-full border border-slate-300 rounded px-2 py-1 text-xs">
+      <h1 class="text-2xl font-bold text-gray-800">
+        Requisición #{{ req.id }} — {{ req.proyecto }}
+      </h1>
+      <p class="text-sm text-gray-500">
+        Solicitada el {{ req.fecha_solicitud.strftime('%Y-%m-%d') if req.fecha_solicitud else '-' }}
+      </p>
+    </div>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('dashboard') }}"
+         class="inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50">
+        ← Volver
+      </a>
+    </div>
+  </div>
+
+  <!-- Estado + prioridad + fechas -->
+  <div class="grid md:grid-cols-4 gap-4 bg-white rounded-xl shadow p-4 border border-gray-100">
+    <div>
+      <p class="text-xs text-gray-500 uppercase font-semibold">Estado</p>
+      {% set estado = req.estado %}
+      {% set estado_class = "bg-gray-100 text-gray-800" %}
+      {% if estado == "Pendiente Autorización" %}
+        {% set estado_class = "bg-yellow-100 text-yellow-800" %}
+      {% elif estado == "Solicitado" %}
+        {% set estado_class = "bg-blue-100 text-blue-800" %}
+      {% elif estado == "Revisado - En Stock" %}
+        {% set estado_class = "bg-green-100 text-green-800" %}
+      {% elif estado == "Revisado - Autorizada" %}
+        {% set estado_class = "bg-red-100 text-red-800" %}
+      {% elif estado == "Comprado" %}
+        {% set estado_class = "bg-purple-100 text-purple-800" %}
+      {% elif estado == "Comprado (Parcial)" %}
+        {% set estado_class = "bg-orange-100 text-orange-800" %}
+      {% endif %}
+      <span class="inline-flex mt-1 px-3 py-1 rounded-full text-xs font-semibold {{ estado_class }}">
+        {{ estado }}
+      </span>
     </div>
 
-    <table class="min-w-full text-xs mb-3">
-        <thead class="bg-slate-100">
-            <tr>
-                <th class="px-2 py-1 border-b">Material</th>
-                <th class="px-2 py-1 border-b">C/U</th>
-                <th class="px-2 py-1 border-b">Cant. a comprar</th>
-            </tr>
+    <div>
+      <p class="text-xs text-gray-500 uppercase font-semibold">Prioridad</p>
+      {% set pri_class = "bg-gray-100 text-gray-800" %}
+      {% if req.prioridad == "Alta" %}
+        {% set pri_class = "bg-red-100 text-red-800" %}
+      {% elif req.prioridad == "Media" %}
+        {% set pri_class = "bg-yellow-100 text-yellow-800" %}
+      {% elif req.prioridad == "Baja" %}
+        {% set pri_class = "bg-green-100 text-green-800" %}
+      {% endif %}
+      <span class="inline-flex mt-1 px-3 py-1 rounded-full text-xs font-semibold {{ pri_class }}">
+        {{ req.prioridad }}
+      </span>
+    </div>
+
+    <div>
+      <p class="text-xs text-gray-500 uppercase font-semibold">Fecha mantenimiento</p>
+      <p class="mt-1 text-sm font-medium text-gray-800">
+        {{ req.fecha_mantenimiento.strftime('%Y-%m-%d') if req.fecha_mantenimiento else '-' }}
+      </p>
+    </div>
+
+    <div>
+      <p class="text-xs text-gray-500 uppercase font-semibold">Costo total</p>
+      <p class="mt-1 text-sm font-semibold text-gray-800">
+        {% if req.costo_total %}
+          ${{ '%.2f'|format(req.costo_total) }}
+        {% else %}
+          N/A
+        {% endif %}
+      </p>
+    </div>
+  </div>
+
+  <!-- Info de autorización / trazabilidad -->
+  <div class="grid md:grid-cols-3 gap-4">
+    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-700 mb-2">Autorización</h2>
+      {% if not req.autorizado %}
+        <p class="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">
+          Esta requisición fue creada por un usuario que requiere autorización (ej. mantenimiento3).
+        </p>
+      {% else %}
+        <p class="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2">
+          Requisición autorizada.
+        </p>
+      {% endif %}
+
+      <dl class="mt-3 space-y-1 text-xs text-gray-600">
+        <div class="flex justify-between">
+          <dt>Solicitante ID</dt>
+          <dd class="font-mono">{{ req.solicitante_id }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt>Autorizado</dt>
+          <dd>{{ "Sí" if req.autorizado else "No" }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt>Autorizado por</dt>
+          <dd>{{ req.autorizado_por or "-" }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt>Fecha autorización</dt>
+          <dd>{{ req.fecha_autorizacion.strftime('%Y-%m-%d %H:%M') if req.fecha_autorizacion else "-" }}</dd>
+        </div>
+      </dl>
+
+      <!-- Botón de autorizar para mantenimiento1/2 -->
+      {% if user.role == 'Mantenimiento' and es_autorizador(user) and not req.autorizado %}
+      <form method="post" action="{{ url_for('autorizar_requisicion', req_id=req.id) }}" class="mt-4">
+        <button type="submit"
+                class="w-full inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700">
+          Autorizar requisición
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-700 mb-2">Revisión de almacén</h2>
+      <dl class="space-y-1 text-xs text-gray-600">
+        <div class="flex justify-between">
+          <dt>Revisado por (ID)</dt>
+          <dd>{{ req.revisado_por or "-" }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt>Fecha revisión</dt>
+          <dd>{{ req.fecha_revision.strftime('%Y-%m-%d %H:%M') if req.fecha_revision else "-" }}</dd>
+        </div>
+      </dl>
+      {% if user.role == 'Almacén' and not req.autorizado %}
+        <p class="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+          Esta requisición aún no ha sido autorizada por Mantenimiento. No puedes procesarla hasta que sea autorizada.
+        </p>
+      {% endif %}
+    </div>
+
+    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-700 mb-2">Compras</h2>
+      <dl class="space-y-1 text-xs text-gray-600">
+        <div class="flex justify-between">
+          <dt>Proveedor(es)</dt>
+          <dd>{{ req.proveedor or "-" }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt>Estado compra</dt>
+          <dd>{{ req.estado }}</dd>
+        </div>
+      </dl>
+      <p class="mt-2 text-[11px] text-gray-500">
+        Compras registra proveedor y costo unitario por material. Almacén puede ver estas actualizaciones para verificar piezas completas.
+      </p>
+    </div>
+  </div>
+
+  <!-- Utilización -->
+  <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+    <h2 class="text-sm font-semibold text-gray-700 mb-2">Utilización / Propósito</h2>
+    <p class="text-sm text-gray-700 whitespace-pre-line">
+      {{ req.utilizacion or "Sin descripción." }}
+    </p>
+  </div>
+
+  <!-- Tabla de materiales (vista general) -->
+  <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
+    <h2 class="text-sm font-semibold text-gray-700 mb-3">Materiales</h2>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
+        <thead class="bg-gray-100 text-gray-700">
+          <tr>
+            <th class="px-2 py-2 border">Descripción</th>
+            <th class="px-2 py-2 border">Unidad</th>
+            <th class="px-2 py-2 border">Cant. Solicitada</th>
+            <th class="px-2 py-2 border">Revisado Almacén</th>
+            <th class="px-2 py-2 border">Stock Real</th>
+            <th class="px-2 py-2 border">Proveedor (Compras)</th>
+            <th class="px-2 py-2 border">Costo Unitario</th>
+            <th class="px-2 py-2 border">Cant. Comprada</th>
+          </tr>
         </thead>
         <tbody>
-        {% for m in req.materiales %}
-            <tr>
-                <td class="px-2 py-1 border-b">
-                    {{ m.descripcion }} ({{ m.cantidad }} {{ m.unidad }})
-                </td>
-                <td class="px-2 py-1 border-b">
-                    <input type="number" name="cu_{{ m.id }}" min="0" step="0.01"
-                           value="{{ m.costo_unitario or '' }}"
-                           class="w-24 border border-slate-300 rounded px-1 py-1 text-xs" required>
-                </td>
-                <td class="px-2 py-1 border-b">
-                    <input type="number" name="comprado_{{ m.id }}" min="0" max="{{ m.cantidad }}"
-                           value="{{ m.comprado_qty or m.cantidad }}"
-                           class="w-24 border border-slate-300 rounded px-1 py-1 text-xs" required>
-                </td>
-            </tr>
-        {% endfor %}
+          {% for m in req.materiales %}
+          <tr class="hover:bg-gray-50">
+            <td class="px-2 py-1 border text-gray-800">{{ m.descripcion }}</td>
+            <td class="px-2 py-1 border text-center">{{ m.unidad }}</td>
+            <td class="px-2 py-1 border text-center font-semibold text-gray-800">{{ m.cantidad }}</td>
+            <td class="px-2 py-1 border text-center text-blue-700">{{ m.revisado_qty or 0 }}</td>
+            <td class="px-2 py-1 border text-center text-blue-700">{{ m.stock_available or 0 }}</td>
+            <td class="px-2 py-1 border text-center text-gray-700">{{ m.proveedor or "-" }}</td>
+            <td class="px-2 py-1 border text-center">
+              {% if m.costo_unitario %}
+                ${{ '%.2f'|format(m.costo_unitario) }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td class="px-2 py-1 border text-center text-purple-700 font-semibold">{{ m.comprado_qty or 0 }}</td>
+          </tr>
+          {% endfor %}
         </tbody>
-    </table>
-
-    <div class="flex gap-3 text-xs">
-        <label class="inline-flex items-center">
-            <input type="radio" name="tipo_compra" value="total" required class="mr-1">
-            Se compró TODO lo de este ID
-        </label>
-        <label class="inline-flex items-center">
-            <input type="radio" name="tipo_compra" value="parcial" required class="mr-1">
-            Se compró SOLO ciertas cantidades
-        </label>
+      </table>
     </div>
+  </div>
 
-    <div class="flex justify-end gap-2 pt-2">
-        <button type="submit"
-                class="px-3 py-2 text-xs rounded bg-emerald-600 text-white hover:bg-emerald-700">
-            Registrar compra
+  <!-- BLOQUE DE FORMULARIOS POR ROL -->
+
+  <!-- Formulario Almacén -->
+  {% if user.role == 'Almacén' and req.autorizado %}
+  <div class="bg-white rounded-xl shadow p-4 border border-blue-100">
+    <h2 class="text-sm font-semibold text-blue-800 mb-2">
+      Procesar requisición en Almacén
+    </h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      Ingresa las cantidades revisadas y el stock real por material. Luego selecciona si
+      el material se encuentra en stock o si debe autorizarse para compra.
+    </p>
+
+    <form method="post" action="{{ url_for('process_almacen', req_id=req.id) }}" id="form-almacen">
+      <input type="hidden" name="accion" id="accion-almacen">
+
+      <div class="overflow-x-auto mb-3">
+        <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-blue-50 text-blue-800">
+            <tr>
+              <th class="px-2 py-2 border">Descripción</th>
+              <th class="px-2 py-2 border">Unidad</th>
+              <th class="px-2 py-2 border">Solicitado</th>
+              <th class="px-2 py-2 border">Revisado</th>
+              <th class="px-2 py-2 border">Stock Real</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in req.materiales %}
+            <tr class="hover:bg-blue-50/40">
+              <td class="px-2 py-1 border text-gray-800">{{ m.descripcion }}</td>
+              <td class="px-2 py-1 border text-center">{{ m.unidad }}</td>
+              <td class="px-2 py-1 border text-center font-semibold text-red-700">{{ m.cantidad }}</td>
+              <td class="px-2 py-1 border text-center">
+                <input type="number" name="rev_{{ m.id }}"
+                       value="{{ m.revisado_qty or 0 }}"
+                       min="0" max="{{ m.cantidad }}"
+                       class="w-20 border rounded px-1 py-0.5 text-center">
+              </td>
+              <td class="px-2 py-1 border text-center">
+                <input type="number" name="stock_{{ m.id }}"
+                       value="{{ m.stock_available or 0 }}"
+                       min="0"
+                       class="w-20 border rounded px-1 py-0.5 text-center">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col md:flex-row gap-3 mt-3">
+        <button type="button"
+                onclick="enviarAlmacen('Revisado - En Stock')"
+                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700">
+          Marcar como Revisado - En Stock
         </button>
-    </div>
-</form>
-{% endif %}
+        <button type="button"
+                onclick="enviarAlmacen('Revisado - Autorizada')"
+                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-red-600 hover:bg-red-700">
+          Marcar como Revisado - Autorizada (para compra)
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
 
-<div class="mt-4">
-    <a href="{{ url_for('dashboard') }}"
-       class="text-xs px-3 py-2 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">
-       Volver al panel
-    </a>
+  <!-- Formulario Compras -->
+  {% if user.role == 'Compras' and req.autorizado %}
+  <div class="bg-white rounded-xl shadow p-4 border border-purple-100">
+    <h2 class="text-sm font-semibold text-purple-800 mb-2">
+      Registrar compra por material
+    </h2>
+    <p class="text-[11px] text-gray-500 mb-3">
+      Define proveedor y costo unitario por material, así como la cantidad efectivamente comprada.
+      Puedes marcar la compra como total o parcial.
+    </p>
+
+    <form method="post" action="{{ url_for('process_compras', req_id=req.id) }}" id="form-compras">
+      <input type="hidden" name="tipo_compra" id="tipo-compra">
+
+      <div class="overflow-x-auto mb-3">
+        <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
+          <thead class="bg-purple-50 text-purple-800">
+            <tr>
+              <th class="px-2 py-2 border">Descripción</th>
+              <th class="px-2 py-2 border">Unidad</th>
+              <th class="px-2 py-2 border">Cant. Solicitada</th>
+              <th class="px-2 py-2 border">Proveedor</th>
+              <th class="px-2 py-2 border">Costo Unitario</th>
+              <th class="px-2 py-2 border">Cant. Comprada</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for m in req.materiales %}
+            <tr class="hover:bg-purple-50/40">
+              <td class="px-2 py-1 border text-gray-800">{{ m.descripcion }}</td>
+              <td class="px-2 py-1 border text-center">{{ m.unidad }}</td>
+              <td class="px-2 py-1 border text-center font-semibold text-gray-800">{{ m.cantidad }}</td>
+              <td class="px-2 py-1 border">
+                <input type="text" name="prov_{{ m.id }}"
+                       value="{{ m.proveedor or '' }}"
+                       class="w-full border rounded px-1 py-0.5">
+              </td>
+              <td class="px-2 py-1 border text-center">
+                <input type="number" name="cu_{{ m.id }}"
+                       value="{{ m.costo_unitario or '' }}"
+                       step="0.01" min="0"
+                       class="w-24 border rounded px-1 py-0.5 text-center">
+              </td>
+              <td class="px-2 py-1 border text-center">
+                <input type="number" name="comprado_{{ m.id }}"
+                       value="{{ m.comprado_qty or 0 }}"
+                       min="0" max="{{ m.cantidad }}"
+                       class="w-20 border rounded px-1 py-0.5 text-center">
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex flex-col md:flex-row gap-3 mt-3">
+        <button type="button"
+                onclick="enviarCompras('total')"
+                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700">
+          Registrar compra TOTAL de esta requisición
+        </button>
+        <button type="button"
+                onclick="enviarCompras('parcial')"
+                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200">
+          Registrar compra PARCIAL (solo algunos materiales)
+        </button>
+      </div>
+    </form>
+  </div>
+  {% endif %}
+
 </div>
+
+<script>
+  function enviarAlmacen(accion) {
+    const hidden = document.getElementById('accion-almacen');
+    hidden.value = accion;
+    document.getElementById('form-almacen').submit();
+  }
+
+  function enviarCompras(tipo) {
+    const hidden = document.getElementById('tipo-compra');
+    hidden.value = tipo;
+    document.getElementById('form-compras').submit();
+  }
+</script>
 
 {% endblock %}

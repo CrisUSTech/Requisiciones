@@ -1,78 +1,102 @@
 {% extends "base.html" %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-4 text-slate-800">Nueva Requisición (Mantenimiento)</h1>
+<h2 class="text-xl font-bold mb-4">Nueva Requisición</h2>
 
-<form method="post" class="space-y-4 bg-white p-4 rounded-lg shadow border border-slate-200">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1">Fecha Mantenimiento</label>
-            <input type="date" name="fecha_mantenimiento" required
-                   class="w-full border border-slate-300 rounded px-2 py-1 text-sm">
-        </div>
-        <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1">Proyecto / Tema</label>
-            <input type="text" name="proyecto" required
-                   class="w-full border border-slate-300 rounded px-2 py-1 text-sm">
-        </div>
-    </div>
-
+<form method="post">
+  <div class="grid grid-cols-2 gap-4 mb-4">
     <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Utilización / Propósito</label>
-        <textarea name="utilizacion" rows="2"
-                  class="w-full border border-slate-300 rounded px-2 py-1 text-sm"></textarea>
+      <label>Fecha de mantenimiento</label>
+      <input type="date" name="fecha_mantenimiento"
+             class="border p-2 w-full" required>
     </div>
-
     <div>
-        <label class="block text-xs font-medium text-slate-700 mb-1">Prioridad</label>
-        <select name="prioridad" class="border border-slate-300 rounded px-2 py-1 text-sm">
-            <option value="Alta">Alta</option>
-            <option value="Media" selected>Media</option>
-            <option value="Baja">Baja</option>
-        </select>
+      <label>Prioridad</label>
+      <select name="prioridad" class="border p-2 w-full">
+        <option value="Alta">Alta</option>
+        <option value="Media" selected>Media</option>
+        <option value="Baja">Baja</option>
+      </select>
     </div>
+  </div>
 
-    <div class="border-t pt-4">
-        <h2 class="text-sm font-semibold mb-2 text-slate-800">Materiales</h2>
-        <p class="text-xs text-slate-500 mb-2">
-            Puedes agregar hasta 10 materiales; si necesitas más, puedes crear otra requisición.
-        </p>
-        <table class="min-w-full text-xs border border-slate-200">
-            <thead class="bg-slate-100">
-                <tr>
-                    <th class="px-2 py-1 border-b">Descripción</th>
-                    <th class="px-2 py-1 border-b">Unidad</th>
-                    <th class="px-2 py-1 border-b">Cantidad</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for i in range(1,6) %}
-                <tr>
-                    <td class="px-2 py-1 border-b">
-                        <input type="text" name="desc_{{i}}" class="w-full border border-slate-300 rounded px-2 py-1 text-xs">
-                    </td>
-                    <td class="px-2 py-1 border-b">
-                        <input type="text" name="unidad_{{i}}" value="PZA"
-                               class="w-full border border-slate-300 rounded px-2 py-1 text-xs">
-                    </td>
-                    <td class="px-2 py-1 border-b">
-                        <input type="number" name="cant_{{i}}" min="0"
-                               class="w-full border border-slate-300 rounded px-2 py-1 text-xs">
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    </div>
+  <div class="mb-4">
+    <label>Proyecto / Tema</label>
+    <input type="text" name="proyecto" class="border p-2 w-full" required>
+  </div>
 
-    <div class="flex justify-end gap-2 pt-2">
-        <a href="{{ url_for('dashboard') }}"
-           class="px-3 py-2 text-xs rounded border border-slate-300 text-slate-700 hover:bg-slate-50">
-           Cancelar
-        </a>
-        <button type="submit"
-                class="px-3 py-2 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
-            Guardar requisición
-        </button>
-    </div>
+  <div class="mb-4">
+    <label>Utilización</label>
+    <textarea name="utilizacion" class="border p-2 w-full"></textarea>
+  </div>
+
+  <h3 class="font-semibold mb-2">Materiales</h3>
+
+  <table class="w-full border mb-3" id="tabla-materiales">
+    <thead>
+      <tr class="bg-gray-100">
+        <th class="border p-2">Descripción</th>
+        <th class="border p-2">Unidad</th>
+        <th class="border p-2">Cantidad</th>
+        <th class="border p-2">Acción</th>
+      </tr>
+    </thead>
+    <tbody id="tbody-materiales">
+      <tr>
+        <td class="border p-1">
+          <input type="text" name="desc[]" class="border p-1 w-full" required>
+        </td>
+        <td class="border p-1">
+          <input type="text" name="unidad[]" class="border p-1 w-full" value="PZA" required>
+        </td>
+        <td class="border p-1">
+          <input type="number" name="cant[]" class="border p-1 w-full" value="1" min="1" required>
+        </td>
+        <td class="border p-1 text-center">
+          <button type="button" class="text-red-600" onclick="eliminarFila(this)">Eliminar</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <button type="button" onclick="agregarFila()"
+          class="mb-4 bg-blue-600 text-white px-3 py-1 rounded">
+    Agregar material
+  </button>
+
+  <div>
+    <button type="submit"
+            class="bg-green-600 text-white px-4 py-2 rounded">
+      Guardar Requisición
+    </button>
+  </div>
 </form>
+
+<script>
+function agregarFila() {
+  const tbody = document.getElementById('tbody-materiales');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td class="border p-1">
+      <input type="text" name="desc[]" class="border p-1 w-full" required>
+    </td>
+    <td class="border p-1">
+      <input type="text" name="unidad[]" class="border p-1 w-full" value="PZA" required>
+    </td>
+    <td class="border p-1">
+      <input type="number" name="cant[]" class="border p-1 w-full" value="1" min="1" required>
+    </td>
+    <td class="border p-1 text-center">
+      <button type="button" class="text-red-600" onclick="eliminarFila(this)">Eliminar</button>
+    </td>`;
+  tbody.appendChild(tr);
+}
+
+function eliminarFila(btn) {
+  const tr = btn.closest('tr');
+  const tbody = document.getElementById('tbody-materiales');
+  if (tbody.rows.length > 1) {
+    tr.remove();
+  }
+}
+</script>
 {% endblock %}
