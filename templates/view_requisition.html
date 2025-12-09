@@ -1,368 +1,295 @@
 {% extends "base.html" %}
+{% block title %}Requisición #{{ req.id }}{% endblock %}
 
 {% block content %}
-
-<div class="max-w-6xl mx-auto py-6 space-y-6">
-
-  <!-- Encabezado + botones -->
-  <div class="flex items-center justify-between">
-    <div>
-      <h1 class="text-2xl font-bold text-gray-800">
-        Requisición #{{ req.id }} — {{ req.proyecto }}
-      </h1>
-      <p class="text-sm text-gray-500">
-        Solicitada el {{ req.fecha_solicitud.strftime('%Y-%m-%d') if req.fecha_solicitud else '-' }}
-      </p>
-    </div>
-    <div class="flex items-center gap-3">
-      <a href="{{ url_for('dashboard') }}"
-         class="inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm text-gray-700 bg-white hover:bg-gray-50">
-        ← Volver
-      </a>
-    </div>
-  </div>
-
-  <!-- Estado + prioridad + fechas -->
-  <div class="grid md:grid-cols-4 gap-4 bg-white rounded-xl shadow p-4 border border-gray-100">
-    <div>
-      <p class="text-xs text-gray-500 uppercase font-semibold">Estado</p>
-      {% set estado = req.estado %}
-      {% set estado_class = "bg-gray-100 text-gray-800" %}
-      {% if estado == "Pendiente Autorización" %}
-        {% set estado_class = "bg-yellow-100 text-yellow-800" %}
-      {% elif estado == "Solicitado" %}
-        {% set estado_class = "bg-blue-100 text-blue-800" %}
-      {% elif estado == "Revisado - En Stock" %}
-        {% set estado_class = "bg-green-100 text-green-800" %}
-      {% elif estado == "Revisado - Autorizada" %}
-        {% set estado_class = "bg-red-100 text-red-800" %}
-      {% elif estado == "Comprado" %}
-        {% set estado_class = "bg-purple-100 text-purple-800" %}
-      {% elif estado == "Comprado (Parcial)" %}
-        {% set estado_class = "bg-orange-100 text-orange-800" %}
-      {% endif %}
-      <span class="inline-flex mt-1 px-3 py-1 rounded-full text-xs font-semibold {{ estado_class }}">
-        {{ estado }}
-      </span>
-    </div>
-
-    <div>
-      <p class="text-xs text-gray-500 uppercase font-semibold">Prioridad</p>
-      {% set pri_class = "bg-gray-100 text-gray-800" %}
-      {% if req.prioridad == "Alta" %}
-        {% set pri_class = "bg-red-100 text-red-800" %}
-      {% elif req.prioridad == "Media" %}
-        {% set pri_class = "bg-yellow-100 text-yellow-800" %}
-      {% elif req.prioridad == "Baja" %}
-        {% set pri_class = "bg-green-100 text-green-800" %}
-      {% endif %}
-      <span class="inline-flex mt-1 px-3 py-1 rounded-full text-xs font-semibold {{ pri_class }}">
-        {{ req.prioridad }}
-      </span>
-    </div>
-
-    <div>
-      <p class="text-xs text-gray-500 uppercase font-semibold">Fecha mantenimiento</p>
-      <p class="mt-1 text-sm font-medium text-gray-800">
-        {{ req.fecha_mantenimiento.strftime('%Y-%m-%d') if req.fecha_mantenimiento else '-' }}
-      </p>
-    </div>
-
-    <div>
-      <p class="text-xs text-gray-500 uppercase font-semibold">Costo total</p>
-      <p class="mt-1 text-sm font-semibold text-gray-800">
-        {% if req.costo_total %}
-          ${{ '%.2f'|format(req.costo_total) }}
-        {% else %}
-          N/A
-        {% endif %}
-      </p>
-    </div>
-  </div>
-
-  <!-- Info de autorización / trazabilidad -->
-  <div class="grid md:grid-cols-3 gap-4">
-    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
-      <h2 class="text-sm font-semibold text-gray-700 mb-2">Autorización</h2>
-      {% if not req.autorizado %}
-        <p class="text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded p-2">
-          Esta requisición fue creada por un usuario que requiere autorización (ej. mantenimiento3).
-        </p>
-      {% else %}
-        <p class="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2">
-          Requisición autorizada.
-        </p>
-      {% endif %}
-
-      <dl class="mt-3 space-y-1 text-xs text-gray-600">
-        <div class="flex justify-between">
-          <dt>Solicitante ID</dt>
-          <dd class="font-mono">{{ req.solicitante_id }}</dd>
-        </div>
-        <div class="flex justify-between">
-          <dt>Autorizado</dt>
-          <dd>{{ "Sí" if req.autorizado else "No" }}</dd>
-        </div>
-        <div class="flex justify-between">
-          <dt>Autorizado por</dt>
-          <dd>{{ req.autorizado_por or "-" }}</dd>
-        </div>
-        <div class="flex justify-between">
-          <dt>Fecha autorización</dt>
-          <dd>{{ req.fecha_autorizacion.strftime('%Y-%m-%d %H:%M') if req.fecha_autorizacion else "-" }}</dd>
-        </div>
-      </dl>
-
-      <!-- Botón de autorizar para mantenimiento1/2 -->
-      {% if user.role == 'Mantenimiento' and es_autorizador(user) and not req.autorizado %}
-      <form method="post" action="{{ url_for('autorizar_requisicion', req_id=req.id) }}" class="mt-4">
-        <button type="submit"
-                class="w-full inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700">
-          Autorizar requisición
-        </button>
-      </form>
-      {% endif %}
-    </div>
-
-    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
-      <h2 class="text-sm font-semibold text-gray-700 mb-2">Revisión de almacén</h2>
-      <dl class="space-y-1 text-xs text-gray-600">
-        <div class="flex justify-between">
-          <dt>Revisado por (ID)</dt>
-          <dd>{{ req.revisado_por or "-" }}</dd>
-        </div>
-        <div class="flex justify-between">
-          <dt>Fecha revisión</dt>
-          <dd>{{ req.fecha_revision.strftime('%Y-%m-%d %H:%M') if req.fecha_revision else "-" }}</dd>
-        </div>
-      </dl>
-      {% if user.role == 'Almacén' and not req.autorizado %}
-        <p class="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
-          Esta requisición aún no ha sido autorizada por Mantenimiento. No puedes procesarla hasta que sea autorizada.
-        </p>
-      {% endif %}
-    </div>
-
-    <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
-      <h2 class="text-sm font-semibold text-gray-700 mb-2">Compras</h2>
-      <dl class="space-y-1 text-xs text-gray-600">
-        <div class="flex justify-between">
-          <dt>Proveedor(es)</dt>
-          <dd>{{ req.proveedor or "-" }}</dd>
-        </div>
-        <div class="flex justify-between">
-          <dt>Estado compra</dt>
-          <dd>{{ req.estado }}</dd>
-        </div>
-      </dl>
-      <p class="mt-2 text-[11px] text-gray-500">
-        Compras registra proveedor y costo unitario por material. Almacén puede ver estas actualizaciones para verificar piezas completas.
-      </p>
-    </div>
-  </div>
-
-  <!-- Utilización -->
-  <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
-    <h2 class="text-sm font-semibold text-gray-700 mb-2">Utilización / Propósito</h2>
-    <p class="text-sm text-gray-700 whitespace-pre-line">
-      {{ req.utilizacion or "Sin descripción." }}
-    </p>
-  </div>
-
-  <!-- Tabla de materiales (vista general) -->
-  <div class="bg-white rounded-xl shadow p-4 border border-gray-100">
-    <h2 class="text-sm font-semibold text-gray-700 mb-3">Materiales</h2>
-
-    <div class="overflow-x-auto">
-      <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
-        <thead class="bg-gray-100 text-gray-700">
-          <tr>
-            <th class="px-2 py-2 border">Descripción</th>
-            <th class="px-2 py-2 border">Unidad</th>
-            <th class="px-2 py-2 border">Cant. Solicitada</th>
-            <th class="px-2 py-2 border">Revisado Almacén</th>
-            <th class="px-2 py-2 border">Stock Real</th>
-            <th class="px-2 py-2 border">Proveedor (Compras)</th>
-            <th class="px-2 py-2 border">Costo Unitario</th>
-            <th class="px-2 py-2 border">Cant. Comprada</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for m in req.materiales %}
-          <tr class="hover:bg-gray-50">
-            <td class="px-2 py-1 border text-gray-800">{{ m.descripcion }}</td>
-            <td class="px-2 py-1 border text-center">{{ m.unidad }}</td>
-            <td class="px-2 py-1 border text-center font-semibold text-gray-800">{{ m.cantidad }}</td>
-            <td class="px-2 py-1 border text-center text-blue-700">{{ m.revisado_qty or 0 }}</td>
-            <td class="px-2 py-1 border text-center text-blue-700">{{ m.stock_available or 0 }}</td>
-            <td class="px-2 py-1 border text-center text-gray-700">{{ m.proveedor or "-" }}</td>
-            <td class="px-2 py-1 border text-center">
-              {% if m.costo_unitario %}
-                ${{ '%.2f'|format(m.costo_unitario) }}
-              {% else %}
-                -
-              {% endif %}
-            </td>
-            <td class="px-2 py-1 border text-center text-purple-700 font-semibold">{{ m.comprado_qty or 0 }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- BLOQUE DE FORMULARIOS POR ROL -->
-
-  <!-- Formulario Almacén -->
-  {% if user.role == 'Almacén' and req.autorizado %}
-  <div class="bg-white rounded-xl shadow p-4 border border-blue-100">
-    <h2 class="text-sm font-semibold text-blue-800 mb-2">
-      Procesar requisición en Almacén
-    </h2>
-    <p class="text-[11px] text-gray-500 mb-3">
-      Ingresa las cantidades revisadas y el stock real por material. Luego selecciona si
-      el material se encuentra en stock o si debe autorizarse para compra.
-    </p>
-
-    <form method="post" action="{{ url_for('process_almacen', req_id=req.id) }}" id="form-almacen">
-      <input type="hidden" name="accion" id="accion-almacen">
-
-      <div class="overflow-x-auto mb-3">
-        <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
-          <thead class="bg-blue-50 text-blue-800">
-            <tr>
-              <th class="px-2 py-2 border">Descripción</th>
-              <th class="px-2 py-2 border">Unidad</th>
-              <th class="px-2 py-2 border">Solicitado</th>
-              <th class="px-2 py-2 border">Revisado</th>
-              <th class="px-2 py-2 border">Stock Real</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for m in req.materiales %}
-            <tr class="hover:bg-blue-50/40">
-              <td class="px-2 py-1 border text-gray-800">{{ m.descripcion }}</td>
-              <td class="px-2 py-1 border text-center">{{ m.unidad }}</td>
-              <td class="px-2 py-1 border text-center font-semibold text-red-700">{{ m.cantidad }}</td>
-              <td class="px-2 py-1 border text-center">
-                <input type="number" name="rev_{{ m.id }}"
-                       value="{{ m.revisado_qty or 0 }}"
-                       min="0" max="{{ m.cantidad }}"
-                       class="w-20 border rounded px-1 py-0.5 text-center">
-              </td>
-              <td class="px-2 py-1 border text-center">
-                <input type="number" name="stock_{{ m.id }}"
-                       value="{{ m.stock_available or 0 }}"
-                       min="0"
-                       class="w-20 border rounded px-1 py-0.5 text-center">
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="flex flex-col md:flex-row gap-3 mt-3">
-        <button type="button"
-                onclick="enviarAlmacen('Revisado - En Stock')"
-                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700">
-          Marcar como Revisado - En Stock
-        </button>
-        <button type="button"
-                onclick="enviarAlmacen('Revisado - Autorizada')"
-                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-red-600 hover:bg-red-700">
-          Marcar como Revisado - Autorizada (para compra)
-        </button>
-      </div>
-    </form>
-  </div>
-  {% endif %}
-
-  <!-- Formulario Compras -->
-  {% if user.role == 'Compras' and req.autorizado %}
-  <div class="bg-white rounded-xl shadow p-4 border border-purple-100">
-    <h2 class="text-sm font-semibold text-purple-800 mb-2">
-      Registrar compra por material
-    </h2>
-    <p class="text-[11px] text-gray-500 mb-3">
-      Define proveedor y costo unitario por material, así como la cantidad efectivamente comprada.
-      Puedes marcar la compra como total o parcial.
-    </p>
-
-    <form method="post" action="{{ url_for('process_compras', req_id=req.id) }}" id="form-compras">
-      <input type="hidden" name="tipo_compra" id="tipo-compra">
-
-      <div class="overflow-x-auto mb-3">
-        <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
-          <thead class="bg-purple-50 text-purple-800">
-            <tr>
-              <th class="px-2 py-2 border">Descripción</th>
-              <th class="px-2 py-2 border">Unidad</th>
-              <th class="px-2 py-2 border">Cant. Solicitada</th>
-              <th class="px-2 py-2 border">Proveedor</th>
-              <th class="px-2 py-2 border">Costo Unitario</th>
-              <th class="px-2 py-2 border">Cant. Comprada</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for m in req.materiales %}
-            <tr class="hover:bg-purple-50/40">
-              <td class="px-2 py-1 border text-gray-800">{{ m.descripcion }}</td>
-              <td class="px-2 py-1 border text-center">{{ m.unidad }}</td>
-              <td class="px-2 py-1 border text-center font-semibold text-gray-800">{{ m.cantidad }}</td>
-              <td class="px-2 py-1 border">
-                <input type="text" name="prov_{{ m.id }}"
-                       value="{{ m.proveedor or '' }}"
-                       class="w-full border rounded px-1 py-0.5">
-              </td>
-              <td class="px-2 py-1 border text-center">
-                <input type="number" name="cu_{{ m.id }}"
-                       value="{{ m.costo_unitario or '' }}"
-                       step="0.01" min="0"
-                       class="w-24 border rounded px-1 py-0.5 text-center">
-              </td>
-              <td class="px-2 py-1 border text-center">
-                <input type="number" name="comprado_{{ m.id }}"
-                       value="{{ m.comprado_qty or 0 }}"
-                       min="0" max="{{ m.cantidad }}"
-                       class="w-20 border rounded px-1 py-0.5 text-center">
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-
-      <div class="flex flex-col md:flex-row gap-3 mt-3">
-        <button type="button"
-                onclick="enviarCompras('total')"
-                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700">
-          Registrar compra TOTAL de esta requisición
-        </button>
-        <button type="button"
-                onclick="enviarCompras('parcial')"
-                class="flex-1 inline-flex justify-center items-center px-3 py-2 rounded-md text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200">
-          Registrar compra PARCIAL (solo algunos materiales)
-        </button>
-      </div>
-    </form>
-  </div>
-  {% endif %}
-
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Requisición #{{ req.id }}</h1>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">Volver</a>
 </div>
 
-<script>
-  function enviarAlmacen(accion) {
-    const hidden = document.getElementById('accion-almacen');
-    hidden.value = accion;
-    document.getElementById('form-almacen').submit();
-  }
+<div class="row">
+  <div class="col-lg-5">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6">Información general</h2>
+        <dl class="row mb-0 small">
+          <dt class="col-5">Proyecto / Tema</dt>
+          <dd class="col-7">{{ req.proyecto }}</dd>
 
-  function enviarCompras(tipo) {
-    const hidden = document.getElementById('tipo-compra');
-    hidden.value = tipo;
-    document.getElementById('form-compras').submit();
-  }
-</script>
+          <dt class="col-5">Área de uso</dt>
+          <dd class="col-7">{{ req.area_uso or '-' }}</dd>
 
+          <dt class="col-5">Fecha solicitud</dt>
+          <dd class="col-7">{{ req.fecha_solicitud.isoformat() if req.fecha_solicitud else '-' }}</dd>
+
+          <dt class="col-5">Fecha mantenimiento</dt>
+          <dd class="col-7">{{ req.fecha_mantenimiento.isoformat() if req.fecha_mantenimiento else '-' }}</dd>
+
+          <dt class="col-5">Prioridad</dt>
+          <dd class="col-7">{{ req.prioridad }}</dd>
+
+          <dt class="col-5">Estado</dt>
+          <dd class="col-7">
+            {% set e = req.estado %}
+            {% set cls = "bg-secondary" %}
+            {% if "Pendiente" in e %}{% set cls = "bg-warning" %}
+            {% elif "Solicitado" in e %}{% set cls = "bg-primary" %}
+            {% elif "Comprado" in e %}{% set cls = "bg-info" %}
+            {% elif "Recibido" in e %}{% set cls = "bg-success" %}
+            {% elif "Cerrado" in e %}{% set cls = "bg-dark" %}
+            {% elif "No" in e %}{% set cls = "bg-danger" %}
+            {% endif %}
+            <span class="badge {{ cls }} text-light">{{ e }}</span>
+          </dd>
+
+          <dt class="col-5">Utilización</dt>
+          <dd class="col-7">{{ req.utilizacion or '-' }}</dd>
+
+          <dt class="col-5">Costo total</dt>
+          <dd class="col-7">
+            {% if req.costo_total %}
+              ${{ "%.2f"|format(req.costo_total) }}
+            {% else %}
+              -
+            {% endif %}
+          </dd>
+
+          <dt class="col-5">Proveedor(es)</dt>
+          <dd class="col-7">{{ req.proveedor or '-' }}</dd>
+        </dl>
+      </div>
+    </div>
+
+    {% if es_autorizador(user) and not req.autorizado and req.estado == 'Pendiente Autorización' %}
+    <div class="card mb-3 border-warning">
+      <div class="card-body">
+        <h2 class="h6 mb-2 text-warning">Autorización de Mantenimiento</h2>
+        <p class="small text-muted mb-2">
+          Esta requisición fue creada por mantenimiento3. Como mantenimiento1 o mantenimiento2
+          puedes autorizarla para que avance a Compras/Almacén.
+        </p>
+        <form method="post" action="{{ url_for('autorizar_requisicion', req_id=req.id) }}">
+          <button type="submit" class="btn btn-sm btn-warning">Autorizar requisición</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="col-lg-7">
+    <!-- Tabla de materiales (siempre visible) -->
+    <div class="card mb-3">
+      <div class="card-body">
+        <h2 class="h6 mb-2">Materiales</h2>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-0">
+            <thead class="table-light small">
+            <tr>
+              <th>Descripción</th>
+              <th>Cant. Solicitada</th>
+              <th>Unidad</th>
+              <th>Cant. Comprada</th>
+              <th>CU</th>
+              <th>Proveedor</th>
+              <th>Recibido almacén</th>
+              <th>Retirado mant.</th>
+            </tr>
+            </thead>
+            <tbody class="small">
+            {% for m in req.materiales %}
+            <tr>
+              <td>{{ m.descripcion }}</td>
+              <td class="text-center">{{ m.cantidad }}</td>
+              <td class="text-center">{{ m.unidad }}</td>
+              <td class="text-center">{{ m.comprado_qty or 0 }}</td>
+              <td class="text-end">
+                {% if m.costo_unitario %}
+                  ${{ "%.2f"|format(m.costo_unitario) }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+              <td>{{ m.proveedor or '-' }}</td>
+              <td class="text-center">
+                {% if m.recibido_almacen %}
+                  <span class="badge bg-success">Sí</span>
+                {% else %}
+                  <span class="badge bg-secondary">No</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if m.no_retirado %}
+                  <span class="badge bg-secondary">No retirado</span>
+                {% elif m.retirado_qty %}
+                  {{ m.retirado_qty }}
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bloque COMPRAS -->
+    {% if session.get("role") == "Compras" %}
+    <div class="card mb-3 border-info">
+      <div class="card-body">
+        <h2 class="h6 mb-2 text-info">Registro de compras por material</h2>
+        <p class="small text-muted mb-2">
+          Define proveedor, costo unitario y cantidad comprada por cada material. Puedes marcar
+          "No comprado" o "No autorizado compras" para cada renglón.
+        </p>
+        <form method="post" action="{{ url_for('process_compras', req_id=req.id) }}">
+          <input type="hidden" name="tipo_compra" value="auto">
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-bordered align-middle mb-0">
+              <thead class="table-light small">
+              <tr>
+                <th>Material</th>
+                <th>Solicitado</th>
+                <th>Proveedor</th>
+                <th>CU</th>
+                <th>Comprado</th>
+                <th>No comprado</th>
+                <th>No autorizado compras</th>
+              </tr>
+              </thead>
+              <tbody class="small">
+              {% for m in req.materiales %}
+              <tr>
+                <td>{{ m.descripcion }}</td>
+                <td class="text-center">{{ m.cantidad }}</td>
+                <td>
+                  <input type="text" class="form-control form-control-sm"
+                         name="prov_{{ m.id }}" value="{{ m.proveedor or '' }}">
+                </td>
+                <td>
+                  <input type="number" class="form-control form-control-sm text-end"
+                         step="0.01" min="0" name="cu_{{ m.id }}"
+                         value="{{ m.costo_unitario or '' }}">
+                </td>
+                <td>
+                  <input type="number" class="form-control form-control-sm text-end"
+                         min="0" name="comprado_{{ m.id }}"
+                         value="{{ m.comprado_qty or 0 }}">
+                </td>
+                <td class="text-center">
+                  <input type="checkbox" name="no_comp_{{ m.id }}" value="1"
+                         {% if m.no_comprado %}checked{% endif %}>
+                </td>
+                <td class="text-center">
+                  <input type="checkbox" name="no_aut_{{ m.id }}" value="1"
+                         {% if m.no_autorizado_compras %}checked{% endif %}>
+                </td>
+              </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" class="btn btn-sm btn-info mt-2">Guardar compras</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Bloque ALMACÉN: recepción (checkbox llegó / no llegó) -->
+    {% if session.get("role") == "Almacén" and req.estado in ['Comprado', 'Comprado (Parcial)'] %}
+    <div class="card mb-3 border-success">
+      <div class="card-body">
+        <h2 class="h6 mb-2 text-success">Recepción en almacén</h2>
+        <p class="small text-muted mb-2">
+          Marca con una palomita los materiales que ya llegaron físicamente al almacén.
+          El estado global se actualizará a <strong>Recibido</strong> / <strong>Recibido Parcial</strong> / <strong>No Recibido</strong>
+          según lo que marques.
+        </p>
+        <form method="post" action="{{ url_for('process_almacen', req_id=req.id) }}">
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-bordered align-middle mb-0">
+              <thead class="table-light small">
+              <tr>
+                <th>Material</th>
+                <th>Cant. comprada</th>
+                <th>Llegó a almacén</th>
+              </tr>
+              </thead>
+              <tbody class="small">
+              {% for m in req.materiales %}
+                {% if (m.comprado_qty or 0) > 0 and not m.no_comprado and not m.no_autorizado_compras %}
+                <tr>
+                  <td>{{ m.descripcion }}</td>
+                  <td class="text-center">{{ m.comprado_qty }}</td>
+                  <td class="text-center">
+                    <input type="checkbox" name="llego_{{ m.id }}" value="1"
+                           {% if m.recibido_almacen %}checked{% endif %}>
+                  </td>
+                </tr>
+                {% endif %}
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" class="btn btn-sm btn-success mt-2">
+            Guardar recepción
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Bloque MANTENIMIENTO: retiro de material -->
+    {% if session.get("role") == "Mantenimiento" and req.estado in ['Recibido', 'Recibido Parcial'] %}
+    <div class="card mb-3 border-primary">
+      <div class="card-body">
+        <h2 class="h6 mb-2 text-primary">Retiro de material por Mantenimiento</h2>
+        <p class="small text-muted mb-2">
+          Indica cuánto material se retiró. Si de un material recibido no se tomó nada, marca "No se retiró".
+          Cuando todos los materiales recibidos estén registrados, la requisición podrá cerrarse.
+        </p>
+        <form method="post" action="{{ url_for('procesar_retiro_mantenimiento', req_id=req.id) }}">
+          <div class="table-responsive mb-2">
+            <table class="table table-sm table-bordered align-middle mb-0">
+              <thead class="table-light small">
+              <tr>
+                <th>Material</th>
+                <th>Cant. recibida (comprada)</th>
+                <th>Cant. retirada</th>
+                <th>No se retiró</th>
+              </tr>
+              </thead>
+              <tbody class="small">
+              {% for m in req.materiales %}
+                {% if m.recibido_almacen and (m.comprado_qty or 0) > 0 %}
+                <tr>
+                  <td>{{ m.descripcion }}</td>
+                  <td class="text-center">{{ m.comprado_qty }}</td>
+                  <td class="text-center">
+                    <input type="number" class="form-control form-control-sm text-end"
+                           name="ret_{{ m.id }}"
+                           min="0" max="{{ m.comprado_qty }}"
+                           value="{{ m.retirado_qty or 0 }}">
+                  </td>
+                  <td class="text-center">
+                    <input type="checkbox" name="no_ret_{{ m.id }}" value="1"
+                           {% if m.no_retirado %}checked{% endif %}>
+                  </td>
+                </tr>
+                {% endif %}
+              {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          <button type="submit" class="btn btn-sm btn-primary mt-2">
+            Guardar retiro
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
 {% endblock %}

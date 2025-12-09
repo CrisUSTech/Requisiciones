@@ -1,196 +1,127 @@
 {% extends "base.html" %}
-
-{% block title %}Dashboard · Sistema de Requisiciones{% endblock %}
+{% block title %}Dashboard - Sistema de Requisiciones{% endblock %}
 
 {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h1 class="h4 mb-0">Requisiciones</h1>
+  {% if session.get("role") == "Mantenimiento" %}
+    <a href="{{ url_for('new_requisition') }}" class="btn btn-sm btn-success">
+      + Nueva requisición
+    </a>
+  {% endif %}
+</div>
 
-<div class="space-y-4">
-
-  <!-- Header principal -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-    <div>
-      <h2 class="text-xl font-bold text-gray-800">
-        Requisiciones
-      </h2>
-      <p class="text-sm text-gray-500">
-        Vista general de todas las requisiciones. Usa los filtros por columna para localizar lo que necesitas.
-      </p>
-    </div>
-
-    <div class="flex flex-wrap gap-2 justify-end">
-      <a href="{{ url_for('export_csv') }}"
-         class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
-        Exportar CSV
-      </a>
-
-      {% if session.role == 'Mantenimiento' %}
-      <a href="{{ url_for('new_requisition') }}"
-         class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 shadow-sm">
-        Nueva requisición
-      </a>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Filtros de columnas -->
-  <form method="get" class="bg-white rounded-xl shadow border border-gray-100 p-4 space-y-3">
-    <div class="grid md:grid-cols-4 gap-3 text-xs">
-      <!-- Proyecto / Tema -->
-      <div class="flex flex-col">
-        <label class="font-semibold text-gray-700 mb-1">Proyecto / Tema</label>
-        <input type="text"
-               name="proyecto"
-               value="{{ request.args.get('proyecto', '') }}"
-               placeholder="Contiene..."
-               class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+<div class="card mb-3">
+  <div class="card-body">
+    <form class="row gy-2 gx-3 align-items-end" method="get" action="{{ url_for('dashboard') }}">
+      <div class="col-md-3">
+        <label class="form-label form-label-sm">Proyecto / Tema</label>
+        <input type="text" name="proyecto" class="form-control form-control-sm"
+               value="{{ request.args.get('proyecto','') }}">
       </div>
-
-      <!-- Prioridad -->
-      <div class="flex flex-col">
-        <label class="font-semibold text-gray-700 mb-1">Prioridad</label>
-        <select name="prioridad"
-                class="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
-          <option value="">Todas</option>
-          <option value="Alta"  {% if request.args.get('prioridad') == 'Alta' %}selected{% endif %}>Alta</option>
-          <option value="Media" {% if request.args.get('prioridad') == 'Media' %}selected{% endif %}>Media</option>
-          <option value="Baja"  {% if request.args.get('prioridad') == 'Baja' %}selected{% endif %}>Baja</option>
-        </select>
-      </div>
-
-      <!-- Fecha mantenimiento -->
-      <div class="flex flex-col">
-        <label class="font-semibold text-gray-700 mb-1">Fecha mantenimiento</label>
-        <input type="date"
-               name="fecha_mantenimiento"
-               value="{{ request.args.get('fecha_mantenimiento', '') }}"
-               class="border border-gray-300 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
-      </div>
-
-      <!-- Estado -->
-      <div class="flex flex-col">
-        <label class="font-semibold text-gray-700 mb-1">Estado</label>
-        <select name="estado"
-                class="border border-gray-300 rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
-          <option value="">Todos</option>
-          {% for e in estados %}
-          <option value="{{ e }}" {% if request.args.get('estado') == e %}selected{% endif %}>{{ e }}</option>
+      <div class="col-md-2">
+        <label class="form-label form-label-sm">Prioridad</label>
+        <select name="prioridad" class="form-select form-select-sm">
+          <option value="">(Todas)</option>
+          {% for p in ['Alta','Media','Baja'] %}
+            <option value="{{ p }}" {% if request.args.get('prioridad')==p %}selected{% endif %}>{{ p }}</option>
           {% endfor %}
         </select>
       </div>
-    </div>
-
-    <div class="flex justify-end gap-2 pt-2 border-t border-gray-100 mt-2">
-      <a href="{{ url_for('dashboard') }}"
-         class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
-        Limpiar filtros
-      </a>
-      <button type="submit"
-              class="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700">
-        Aplicar filtros
-      </button>
-    </div>
-  </form>
-
-  <!-- Tabla -->
-  <div class="bg-white rounded-xl shadow border border-gray-100 p-3">
-    {% if requisitions|length == 0 %}
-      <div class="py-10 text-center text-sm text-gray-500">
-        No hay requisiciones que coincidan con los filtros actuales.
+      <div class="col-md-2">
+        <label class="form-label form-label-sm">Fecha mant.</label>
+        <input type="date" name="fecha_mantenimiento" class="form-control form-control-sm"
+               value="{{ request.args.get('fecha_mantenimiento','') }}">
       </div>
-    {% else %}
-      <div class="overflow-x-auto">
-        <table class="min-w-full text-xs border border-gray-200 rounded-lg overflow-hidden">
-          <thead class="bg-gray-100 text-gray-700">
-            <tr>
-              <th class="px-3 py-2 border text-left">ID</th>
-              <th class="px-3 py-2 border text-left">Proyecto / Tema</th>
-              <th class="px-3 py-2 border text-left">Prioridad</th>
-              <th class="px-3 py-2 border text-left">Fecha Mant.</th>
-              <th class="px-3 py-2 border text-left">Estado</th>
-              <th class="px-3 py-2 border text-left">Solicitante</th>
-              <th class="px-3 py-2 border text-right">Costo Total</th>
-              <th class="px-3 py-2 border text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in requisitions %}
-              {% set estado = r.estado %}
-              {% set estado_class = "bg-gray-100 text-gray-800" %}
-              {% if estado == "Pendiente Autorización" %}
-                {% set estado_class = "bg-yellow-100 text-yellow-800" %}
-              {% elif estado == "Solicitado" %}
-                {% set estado_class = "bg-blue-100 text-blue-800" %}
-              {% elif estado == "Revisado - En Stock" %}
-                {% set estado_class = "bg-green-100 text-green-800" %}
-              {% elif estado == "Revisado - Autorizada" %}
-                {% set estado_class = "bg-red-100 text-red-800" %}
-              {% elif estado == "Comprado" %}
-                {% set estado_class = "bg-purple-100 text-purple-800" %}
-              {% elif estado == "Comprado (Parcial)" %}
-                {% set estado_class = "bg-orange-100 text-orange-800" %}
-              {% endif %}
-
-              {% set pri_class = "bg-gray-100 text-gray-800" %}
-              {% if r.prioridad == "Alta" %}
-                {% set pri_class = "bg-red-100 text-red-800" %}
-              {% elif r.prioridad == "Media" %}
-                {% set pri_class = "bg-yellow-100 text-yellow-800" %}
-              {% elif r.prioridad == "Baja" %}
-                {% set pri_class = "bg-green-100 text-green-800" %}
-              {% endif %}
-
-              <tr class="hover:bg-gray-50">
-                <td class="px-3 py-2 border text-sm font-semibold text-gray-800">
-                  {{ r.id }}
-                </td>
-                <td class="px-3 py-2 border text-xs text-gray-800 max-w-xs">
-                  <div class="font-medium truncate" title="{{ r.proyecto }}">{{ r.proyecto }}</div>
-                  {% if r.utilizacion %}
-                    <div class="text-[11px] text-gray-400 truncate" title="{{ r.utilizacion }}">
-                      {{ r.utilizacion }}
-                    </div>
-                  {% endif %}
-                </td>
-                <td class="px-3 py-2 border">
-                  <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold {{ pri_class }}">
-                    {{ r.prioridad }}
-                  </span>
-                </td>
-                <td class="px-3 py-2 border text-xs text-gray-700">
-                  {{ r.fecha_mantenimiento.strftime('%Y-%m-%d') if r.fecha_mantenimiento else '-' }}
-                </td>
-                <td class="px-3 py-2 border">
-                  <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold {{ estado_class }}">
-                    {{ r.estado }}
-                  </span>
-                </td>
-                <td class="px-3 py-2 border text-xs text-gray-600">
-                  ID {{ r.solicitante_id }}
-                  {% if not r.autorizado %}
-                    <span class="ml-1 text-[10px] text-yellow-700">(pend. autorización)</span>
-                  {% endif %}
-                </td>
-                <td class="px-3 py-2 border text-xs text-right text-gray-800">
-                  {% if r.costo_total %}
-                    ${{ '%.2f'|format(r.costo_total) }}
-                  {% else %}
-                    -
-                  {% endif %}
-                </td>
-                <td class="px-3 py-2 border text-center">
-                  <a href="{{ url_for('view_requisition', req_id=r.id) }}"
-                     class="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-100">
-                    Ver detalle
-                  </a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+      <div class="col-md-3">
+        <label class="form-label form-label-sm">Estado</label>
+        <select name="estado" class="form-select form-select-sm">
+          <option value="">(Todos)</option>
+          {% for e in estados %}
+            <option value="{{ e }}" {% if request.args.get('estado')==e %}selected{% endif %}>{{ e }}</option>
+          {% endfor %}
+        </select>
       </div>
-    {% endif %}
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filtrar</button>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+      </div>
+    </form>
   </div>
-
 </div>
 
+<div class="card">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0 align-middle">
+        <thead class="table-light">
+        <tr>
+          <th>ID</th>
+          <th>Proyecto / Tema</th>
+          <th>Área</th>
+          <th>Prioridad</th>
+          <th>Fecha Mant.</th>
+          <th>Estado</th>
+          <th>Costo total</th>
+          <th>Proveedor</th>
+          <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        {% if requisitions %}
+          {% for r in requisitions %}
+          <tr>
+            <td>{{ r.id }}</td>
+            <td>{{ r.proyecto }}</td>
+            <td>{{ r.area_uso or '-' }}</td>
+            <td>
+              {% if r.prioridad == 'Alta' %}
+                <span class="badge text-bg-danger">{{ r.prioridad }}</span>
+              {% elif r.prioridad == 'Media' %}
+                <span class="badge text-bg-warning">{{ r.prioridad }}</span>
+              {% else %}
+                <span class="badge text-bg-secondary">{{ r.prioridad }}</span>
+              {% endif %}
+            </td>
+            <td>{{ r.fecha_mantenimiento.isoformat() if r.fecha_mantenimiento else '-' }}</td>
+            <td>
+              {% set e = r.estado %}
+              {% set cls = "bg-secondary" %}
+              {% if "Pendiente" in e %}{% set cls = "bg-warning" %}
+              {% elif "Solicitado" in e %}{% set cls = "bg-primary" %}
+              {% elif "Comprado" in e %}{% set cls = "bg-info" %}
+              {% elif "Recibido" in e %}{% set cls = "bg-success" %}
+              {% elif "Cerrado" in e %}{% set cls = "bg-dark" %}
+              {% elif "No" in e %}{% set cls = "bg-danger" %}
+              {% endif %}
+              <span class="badge badge-estado {{ cls }} text-light">{{ e }}</span>
+            </td>
+            <td>
+              {% if r.costo_total %}
+                ${{ "%.2f"|format(r.costo_total) }}
+              {% else %}
+                -
+              {% endif %}
+            </td>
+            <td>{{ r.proveedor or '-' }}</td>
+            <td class="text-end">
+              <a href="{{ url_for('view_requisition', req_id=r.id) }}"
+                 class="btn btn-sm btn-outline-primary">
+                Ver
+              </a>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-3">
+              No hay requisiciones que coincidan con el filtro.
+            </td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
 {% endblock %}

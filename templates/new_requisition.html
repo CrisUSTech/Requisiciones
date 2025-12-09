@@ -1,102 +1,115 @@
 {% extends "base.html" %}
-{% block content %}
-<h2 class="text-xl font-bold mb-4">Nueva Requisición</h2>
+{% block title %}Nueva Requisición{% endblock %}
 
-<form method="post">
-  <div class="grid grid-cols-2 gap-4 mb-4">
-    <div>
-      <label>Fecha de mantenimiento</label>
-      <input type="date" name="fecha_mantenimiento"
-             class="border p-2 w-full" required>
-    </div>
-    <div>
-      <label>Prioridad</label>
-      <select name="prioridad" class="border p-2 w-full">
-        <option value="Alta">Alta</option>
-        <option value="Media" selected>Media</option>
-        <option value="Baja">Baja</option>
-      </select>
-    </div>
-  </div>
-
-  <div class="mb-4">
-    <label>Proyecto / Tema</label>
-    <input type="text" name="proyecto" class="border p-2 w-full" required>
-  </div>
-
-  <div class="mb-4">
-    <label>Utilización</label>
-    <textarea name="utilizacion" class="border p-2 w-full"></textarea>
-  </div>
-
-  <h3 class="font-semibold mb-2">Materiales</h3>
-
-  <table class="w-full border mb-3" id="tabla-materiales">
-    <thead>
-      <tr class="bg-gray-100">
-        <th class="border p-2">Descripción</th>
-        <th class="border p-2">Unidad</th>
-        <th class="border p-2">Cantidad</th>
-        <th class="border p-2">Acción</th>
-      </tr>
-    </thead>
-    <tbody id="tbody-materiales">
-      <tr>
-        <td class="border p-1">
-          <input type="text" name="desc[]" class="border p-1 w-full" required>
-        </td>
-        <td class="border p-1">
-          <input type="text" name="unidad[]" class="border p-1 w-full" value="PZA" required>
-        </td>
-        <td class="border p-1">
-          <input type="number" name="cant[]" class="border p-1 w-full" value="1" min="1" required>
-        </td>
-        <td class="border p-1 text-center">
-          <button type="button" class="text-red-600" onclick="eliminarFila(this)">Eliminar</button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
-
-  <button type="button" onclick="agregarFila()"
-          class="mb-4 bg-blue-600 text-white px-3 py-1 rounded">
-    Agregar material
-  </button>
-
-  <div>
-    <button type="submit"
-            class="bg-green-600 text-white px-4 py-2 rounded">
-      Guardar Requisición
-    </button>
-  </div>
-</form>
-
-<script>
-function agregarFila() {
-  const tbody = document.getElementById('tbody-materiales');
-  const tr = document.createElement('tr');
-  tr.innerHTML = `
-    <td class="border p-1">
-      <input type="text" name="desc[]" class="border p-1 w-full" required>
-    </td>
-    <td class="border p-1">
-      <input type="text" name="unidad[]" class="border p-1 w-full" value="PZA" required>
-    </td>
-    <td class="border p-1">
-      <input type="number" name="cant[]" class="border p-1 w-full" value="1" min="1" required>
-    </td>
-    <td class="border p-1 text-center">
-      <button type="button" class="text-red-600" onclick="eliminarFila(this)">Eliminar</button>
-    </td>`;
-  tbody.appendChild(tr);
-}
-
-function eliminarFila(btn) {
-  const tr = btn.closest('tr');
-  const tbody = document.getElementById('tbody-materiales');
-  if (tbody.rows.length > 1) {
-    tr.remove();
+{% block extra_head %}
+<style>
+  .material-row .form-control-sm {
+    font-size: .8rem;
   }
-}
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">Nueva requisición</h1>
+
+<div class="card">
+  <div class="card-body">
+    <form method="post" action="{{ url_for('new_requisition') }}" id="form-nueva">
+
+      <div class="row mb-3">
+        <div class="col-md-3">
+          <label class="form-label">Fecha mantenimiento</label>
+          <input type="date" name="fecha_mantenimiento" class="form-control" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Proyecto / Tema</label>
+          <input type="text" name="proyecto" class="form-control" required>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Área donde se usará</label>
+          <input type="text" name="area_uso" class="form-control" placeholder="Ej. Producción, Taller...">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Prioridad</label>
+          <select name="prioridad" class="form-select">
+            <option value="Alta">Alta</option>
+            <option value="Media" selected>Media</option>
+            <option value="Baja">Baja</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Utilización / Motivo</label>
+        <textarea name="utilizacion" rows="2" class="form-control"
+                  placeholder="Describe para qué se requiere el material"></textarea>
+      </div>
+
+      <hr>
+
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <h2 class="h6 mb-0">Materiales solicitados</h2>
+        <button type="button" class="btn btn-sm btn-outline-success" onclick="addMaterialRow()">
+          + Agregar material
+        </button>
+      </div>
+
+      <div id="materials-container"></div>
+
+      <div class="mt-3">
+        <button type="submit" class="btn btn-primary">Guardar requisición</button>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">Cancelar</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function createMaterialRow() {
+    const div = document.createElement('div');
+    div.className = 'material-row';
+
+    div.innerHTML = `
+      <div class="row g-2 align-items-end">
+        <div class="col-md-6">
+          <label class="form-label form-label-sm">Descripción del material</label>
+          <input type="text" name="desc[]" class="form-control form-control-sm" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label form-label-sm">Cantidad</label>
+          <input type="number" name="cant[]" class="form-control form-control-sm" min="1" value="1" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label form-label-sm">Unidad</label>
+          <input type="text" name="unidad[]" class="form-control form-control-sm" placeholder="PZA, KG..." required>
+        </div>
+        <div class="col-md-2 text-end">
+          <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeMaterialRow(this)">
+            Eliminar
+          </button>
+        </div>
+      </div>
+    `;
+    return div;
+  }
+
+  function addMaterialRow() {
+    const container = document.getElementById('materials-container');
+    container.appendChild(createMaterialRow());
+  }
+
+  function removeMaterialRow(btn) {
+    const row = btn.closest('.material-row');
+    if (row) {
+      row.remove();
+    }
+  }
+
+  // Al cargar la página, agregamos al menos una fila
+  document.addEventListener('DOMContentLoaded', () => {
+    addMaterialRow();
+  });
 </script>
 {% endblock %}
